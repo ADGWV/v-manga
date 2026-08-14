@@ -14,6 +14,9 @@
   <div class="auth-card">
     <div class="auth-logo">🌊 مانجا <span>ويف</span></div>
 
+    <!-- صندوق الخطأ الواضح -->
+    <div id="errBox" style="display:none;background:rgba(230,57,70,.15);border:1px solid var(--red);color:#ff8a95;border-radius:12px;padding:12px;font-size:13px;margin-bottom:12px;direction:ltr;text-align:left"></div>
+
     <div class="tabs">
       <button id="tabLogin" class="tab on">تسجيل الدخول</button>
       <button id="tabSignup" class="tab">حساب جديد</button>
@@ -46,11 +49,29 @@
 
   <script type="module">
     import { auth, googleProvider } from './js/firebase.js';
-    import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged, signInWithRedirect, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
     const $ = id => document.getElementById(id);
 
+    /* عرض الخطأ بشكل واضح */
+    function showErr(code, msg){
+      const box = $('errBox');
+      box.style.display = 'block';
+      box.textContent = '⚠️ ' + code + (msg ? ' — ' + msg : '');
+    }
+
     onAuthStateChanged(auth, user => { if(user) location.href = 'index.html'; });
+
+    /* جوجل بطريقة Redirect (أحسن للموبايل) */
+    $('googleBtn').onclick = () => {
+      signInWithRedirect(auth, googleProvider);
+    };
+
+    /* نتيجة الرجوع من جوجل */
+    getRedirectResult(auth).then(() => {}).catch(err => {
+      console.error('Google error:', err.code, err.message);
+      showErr(err.code, err.message);
+    });
 
     function show(login){
       $('tabLogin').classList.toggle('on', login);
@@ -83,15 +104,6 @@
       }catch(err){
         $('suMsg').textContent =
           err.code === 'auth/email-already-in-use' ? 'الإيميل ده مسجل قبل كده' : err.message;
-      }
-    };
-
-    $('googleBtn').onclick = async () => {
-      try{
-        await signInWithPopup(auth, googleProvider);
-      }catch(err){
-        console.error('Google error:', err.code, err.message);
-        $('loginMsg').textContent = 'خطأ: ' + (err.code || err.message);
       }
     };
   </script>
