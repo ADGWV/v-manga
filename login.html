@@ -14,7 +14,6 @@
   <div class="auth-card">
     <div class="auth-logo">🌊 مانجا <span>ويف</span></div>
 
-    <!-- صندوق الخطأ الواضح -->
     <div id="errBox" style="display:none;background:rgba(230,57,70,.15);border:1px solid var(--red);color:#ff8a95;border-radius:12px;padding:12px;font-size:13px;margin-bottom:12px;direction:ltr;text-align:left"></div>
 
     <div class="tabs">
@@ -49,29 +48,17 @@
 
   <script type="module">
     import { auth, googleProvider } from './js/firebase.js';
-    import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged, signInWithRedirect, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged, signInWithRedirect, getRedirectResult, linkWithCredential, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
     const $ = id => document.getElementById(id);
 
-    /* عرض الخطأ بشكل واضح */
-    function showErr(code, msg){
+    function showErr(msg){
       const box = $('errBox');
       box.style.display = 'block';
-      box.textContent = '⚠️ ' + code + (msg ? ' — ' + msg : '');
+      box.textContent = '⚠️ ' + msg;
     }
 
     onAuthStateChanged(auth, user => { if(user) location.href = 'index.html'; });
-
-    /* جوجل بطريقة Redirect (أحسن للموبايل) */
-    $('googleBtn').onclick = () => {
-      signInWithRedirect(auth, googleProvider);
-    };
-
-    /* نتيجة الرجوع من جوجل */
-    getRedirectResult(auth).then(() => {}).catch(err => {
-      console.error('Google error:', err.code, err.message);
-      showErr(err.code, err.message);
-    });
 
     function show(login){
       $('tabLogin').classList.toggle('on', login);
@@ -82,11 +69,35 @@
     $('tabLogin').onclick  = () => show(true);
     $('tabSignup').onclick = () => show(false);
 
+    /* ═══ ربط حساب جوجل ═══ */
+    let pendingGoogle = null;
+
+    $('googleBtn').onclick = () => signInWithRedirect(auth, googleProvider);
+
+    getRedirectResult(auth).then(() => {}).catch(err => {
+      console.error('Google error:', err.code);
+      if(err.code === 'auth/account-exists-with-different-credential'){
+        pendingGoogle = GoogleAuthProvider.credentialFromError(err);
+        const email = (err.customData && err.customData.email) || '';
+        show(true);
+        $('loginEmail').value = email;
+        $('loginMsg').textContent = 'الإيميل ده مسجل بإيميل/باسورد — اكتب الباسورد عشان نربط جوجل بيه';
+      } else {
+        showErr(err.code + ' — ' + (err.message || ''));
+      }
+    });
+
+    /* دخول (مع ربط جوجل لو في طلب معلق) */
     $('loginForm').onsubmit = async e => {
       e.preventDefault();
       $('loginMsg').textContent = '';
       try{
-        await signInWithEmailAndPassword(auth, $('loginEmail').value.trim(), $('loginPass').value);
+        const cred = await signInWithEmailAndPassword(auth, $('loginEmail').value.trim(), $('loginPass').value);
+        if(pendingGoogle){
+          await linkWithCredential(cred.user, pendingGoogle);
+          pendingGoogle = null;
+          $('loginMsg').textContent = '✅ تم ربط جوجل — هيتحول للرئيسية';
+        }
       }catch(err){
         $('loginMsg').textContent =
           (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential')
@@ -94,6 +105,7 @@
       }
     };
 
+    /* حساب جديد */
     $('signupForm').onsubmit = async e => {
       e.preventDefault();
       $('suMsg').textContent = '';
